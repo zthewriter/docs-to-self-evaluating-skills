@@ -34,17 +34,30 @@ Every day, after MCP Studio refreshes your sources:
 
 You need Node 20 or later, an MCP Studio account, and an OpenAI API key.
 
-1. **Index your docs.** In [MCP Studio](https://appatools.com/mcp-studio), create a server and add the documentation as a source. Wait until the source shows as indexed.
-2. **Create an API key** in [**Account** > **API Keys**](https://appatools.com/mcp-studio/account/api-keys). It starts with `msk_live_`.
-3. **Find the source ID.**
+1. **Get the code.** Click **Use this template** on GitHub to make your own copy (the daily workflow commits to it), then clone it:
 
    ```bash
+   git clone https://github.com/<you>/<your-copy>.git
+   cd <your-copy>
+   ```
+
+2. **Index your docs.** In [MCP Studio](https://appatools.com/mcp-studio), create a server and add the documentation as a source. Wait until the source shows as indexed.
+3. **Create an API key** in [**Account** > **API Keys**](https://appatools.com/mcp-studio/account/api-keys). It starts with `msk_live_` and is shown once.
+4. **Find the source ID.** Your server slug is the last part of its MCP URL (`https://appatools.com/mcp-studio/api/mcp/<your-server-slug>`).
+
+   ```bash
+   export MCP_STUDIO_API_KEY=msk_live_...
    curl https://appatools.com/mcp-studio/api/mcp/<your-server-slug> \
      -H "Authorization: Bearer $MCP_STUDIO_API_KEY" | jq '.sources[] | {id, url}'
    ```
 
-4. **Configure.** Put the server slug and source ID in `skills.config.json`, and copy `.env.example` to `.env` with your keys.
-5. **Run.**
+5. **Configure.** Put the server slug and source ID in `skills.config.json`. Then create `.env` and fill in `MCP_STUDIO_API_KEY` and `OPENAI_API_KEY`:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+6. **Run.** No `npm install` is needed; the project has no dependencies.
 
    ```bash
    npm test
@@ -57,9 +70,10 @@ You need Node 20 or later, an MCP Studio account, and an OpenAI API key.
 
 `.github/workflows/daily.yml` runs at 15:00 UTC, two hours after MCP Studio refreshes sources, and commits `skills/`, `state/`, and `reports/` back to the repository. The run summary on the Actions page is that day's report.
 
-1. Push this repository to GitHub.
-2. Add `MCP_STUDIO_API_KEY` and `OPENAI_API_KEY` under **Settings** > **Secrets and variables** > **Actions**. Optionally add a variable named `OPENAI_MODEL`.
-3. Run the workflow once from the **Actions** tab, or wait for the schedule. Tick **replan** to plan the skills again from scratch.
+1. Commit your `skills.config.json` and push it to your copy. Never commit `.env`; it is gitignored.
+2. If your copy is a fork, open the **Actions** tab and enable workflows, since GitHub turns off scheduled workflows on forks.
+3. Add `MCP_STUDIO_API_KEY` and `OPENAI_API_KEY` under **Settings** > **Secrets and variables** > **Actions**. Optionally add a variable named `OPENAI_MODEL`.
+4. Run the workflow once from the **Actions** tab, or wait for the schedule. Tick **replan** to plan the skills again from scratch.
 
 ## Use the skills
 
