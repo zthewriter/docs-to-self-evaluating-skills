@@ -1,0 +1,68 @@
+{
+  "skill_name": "add-server-to-codex",
+  "task": "How do I add the server to Codex?",
+  "pages": [
+    "https://appatools.com/mcp-studio/blog/how-to-connect-an-mcp-server-to-codex"
+  ],
+  "evals": [
+    {
+      "id": 1,
+      "split": "train",
+      "prompt": "How do I add our 'Harborline' MCP server to Codex using the CLI?",
+      "expected_output": "You should run the command `codex mcp add harborline --url https://appatools.com/mcp-studio/api/mcp/your-server-name` in the Codex CLI to add the server.",
+      "assertions": [
+        "The command to add an MCP server in the CLI is 'codex mcp add <name> --url <url>'.",
+        "The example server URL format is 'https://appatools.com/mcp-studio/api/mcp/your-server-name'.",
+        "It's specified that you can use the command line to add the server, confirming it can be done without the desktop app."
+      ]
+    },
+    {
+      "id": 2,
+      "split": "holdout",
+      "prompt": "Can you guide me on adding a private server and what I need to change in the configuration?",
+      "expected_output": "To add a private server, you need to make it private in MCP Studio, create an access token, and set the 'bearer_token_env_var' in 'config.toml' to the variable name holding the token.",
+      "assertions": [
+        "You must create an access token starting with 'mcps_live_' as part of connecting a private server.",
+        "The 'bearer_token_env_var' in 'config.toml' takes the variable's name, never the token itself.",
+        "The setup requires using 'http_headers = { \"Authorization\" = \"Bearer <token>\" }' if you choose to send the token directly."
+      ]
+    },
+    {
+      "id": 3,
+      "split": "train",
+      "prompt": "What steps do I follow to add the server using the ChatGPT desktop app?",
+      "expected_output": "You need to open Settings, select MCP servers, add your server with a name, choose Streamable HTTP, paste the URL, save, and then restart.",
+      "assertions": [
+        "You first open Settings and then select MCP servers in the ChatGPT desktop app.",
+        "After selecting 'Add server', you enter a name and paste the server URL.",
+        "The server should be saved and you need to select 'Restart' to finalize the process."
+      ]
+    },
+    {
+      "id": 4,
+      "split": "holdout",
+      "prompt": "If I add a server but nothing appears when using '/mcp', what should I check?",
+      "expected_output": "You should check that the URL contains '/api/mcp/' and ensure you start a new session, as the server won't appear in an already open chat.",
+      "assertions": [
+        "You must check that the URL of the server contains '/api/mcp/'.",
+        "If the server does not appear, starting a new session is necessary for Codex to recognize the newly added server.",
+        "The guide states that a startup message indicating a missing environment variable means the variable was not set or was incorrectly referenced."
+      ]
+    }
+  ],
+  "baseline": {
+    "passed": 1,
+    "total": 12,
+    "pass_rate": 0.08333333333333333,
+    "train": {
+      "passed": 1,
+      "total": 6,
+      "pass_rate": 0.16666666666666666
+    },
+    "holdout": {
+      "passed": 0,
+      "total": 6,
+      "pass_rate": 0
+    }
+  }
+}

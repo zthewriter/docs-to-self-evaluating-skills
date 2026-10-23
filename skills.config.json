@@ -1,0 +1,10 @@
+{
+  "sources": [
+    { "server": "<your-server-slug>", "sourceId": "<source-id>" }
+  ],
+  "maxSkillsPerSource": 6,
+  "evalsPerSkill": 4,
+  "improveRounds": 2,
+  "minGain": 2,
+  "maxPassageChars": 40000
+}

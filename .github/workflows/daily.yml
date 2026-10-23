@@ -1,0 +1,42 @@
+name: Daily skills run
+
+# MCP Studio refreshes sources at 13:00 UTC. Running two hours later gives the
+# refresh time to finish; a source still indexing is skipped and retried tomorrow.
+on:
+  schedule:
+    - cron: '0 15 * * *'
+  workflow_dispatch:
+    inputs:
+      replan:
+        description: Plan the skills again from scratch
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-skills
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+      - run: node bin/cli.mjs ${{ inputs.replan && '--replan' || '' }}
+        env:
+          MCP_STUDIO_API_KEY: ${{ secrets.MCP_STUDIO_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-mini' }}
+      - name: Commit skills, state, and the report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add skills state reports
+          git diff --cached --quiet || git commit -m "Daily skills run $(date -u +%F)"
+          git push

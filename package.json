@@ -1,0 +1,16 @@
+{
+  "name": "docs-to-self-evaluating-skills",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Turn the docs you index in MCP Studio into agent skills that are graded against those docs and improved every day.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "daily": "node --env-file-if-exists=.env bin/cli.mjs",
+    "plan": "node --env-file-if-exists=.env bin/cli.mjs --replan",
+    "test": "node --test tests/"
+  },
+  "license": "MIT"
+}
