@@ -4,7 +4,7 @@ Turn documentation you trust into agent skills your AI coding assistant can foll
 
 Say you are adding Amazon S3 uploads to a web app. Index the S3 docs in [MCP Studio](https://appatools.com/mcp-studio), point this project at that source, and you get skills such as `s3-presigned-uploads`: a `SKILL.md` that Cursor, Claude Code, or Codex follows to set it up in your codebase, built from the exact passages in the docs. Each skill ships with evals written from the same passages, a score with and without the skill, and a daily report of what improved.
 
-It is a sample project for the MCP Studio API. Everything it reads comes from one endpoint, [List recently indexed chunks](https://docs.appatools.com/api/reference/sources), and its grading is the same evidence-checked grading as the MCP Studio eval playground.
+It is a sample project for the MCP Studio API. Everything it reads comes from one endpoint, [List recently indexed chunks](https://docs.appatools.com/api/reference/sources), and its grading is the same evidence-checked grading as the [MCP Studio eval playground](https://eval-playground-two.vercel.app/eval-playground).
 
 ## How it works
 
@@ -75,6 +75,19 @@ You need Node 20 or later, an MCP Studio account, and an OpenAI API key.
 3. Add `MCP_STUDIO_API_KEY` and `OPENAI_API_KEY` under **Settings** > **Secrets and variables** > **Actions**. Optionally add a variable named `OPENAI_MODEL`.
 4. Run the workflow once from the **Actions** tab, or wait for the schedule. Tick **replan** to plan the skills again from scratch.
 
+## Where the results go
+
+Nothing is emailed or posted anywhere. Every run writes its results into the repository, and on GitHub Actions the workflow commits them, so the history is your commit log.
+
+| What | Where |
+|---|---|
+| The daily report | `reports/YYYY-MM-DD.md`, and the run summary on the workflow's page in the **Actions** tab |
+| Each skill's latest answers and grades | `skills/<name>/evals/latest.json` |
+| Every skill's score, every day | `state/history.jsonl`, one line per skill per run |
+| What changed in a skill | The diff of `skills/<name>/SKILL.md` in that day's commit |
+
+To get the report somewhere else, add a step to `.github/workflows/daily.yml` after the run that sends `reports/$(date -u +%F).md` to Slack, email, or an issue.
+
 ## Use the skills
 
 Each skill is a folder in `skills/` containing `SKILL.md`. Copy the folders you want into your assistant's skills directory, such as `.cursor/skills/` or `.claude/skills/`, in the project where you are building. The `## Sources` list at the bottom of each skill links the pages it was written from.
@@ -119,7 +132,7 @@ src/pages.mjs           pages, fingerprints, and what changed
 src/plan.mjs            planning skills from page titles
 src/skills.mjs          writing and revising SKILL.md
 src/evals.mjs           writing, running, and scoring evals
-src/eval-core.mjs       evidence-checked grading from the eval playground
+src/eval-core.mjs       evidence-checked grading from the MCP Studio eval playground
 src/daily.mjs           the daily run
 src/report.mjs          the daily report
 skills/ state/ reports/ output, committed by the daily workflow
