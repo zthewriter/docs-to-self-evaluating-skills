@@ -27,7 +27,7 @@ Every day, after MCP Studio refreshes your sources:
 2. **Plan.** On the first run, a model reads the page titles and proposes up to six task-shaped skills, each tied to the pages it needs. The plan is saved in `state/plan.json`; edit it by hand if you like.
 3. **Build.** A new skill, or one whose pages changed, is written from those pages' passages. Its evals are rewritten from the same passages, so the skill is graded against the docs rather than against itself.
 4. **Grade.** Each eval is answered twice, once following the skill and once without it, and every check is graded. A pass counts only when the grader quotes the answer, so a lenient grader cannot pass a check it did not verify.
-5. **Improve.** The model revises the skill using the checks it missed, and the revision is graded again. It replaces the skill only if it passes at least two more checks **and** no fewer held-out checks. Half the evals are held out and never shown to the reviser, so a skill cannot be rewritten to pass only the tests it saw.
+5. **Improve.** The model revises the skill using the checks it missed, and the revision is graded again. It replaces the skill only if it passes at least two more checks **and** no fewer held-out checks. Half the evals are held out and never shown to the reviser, so a skill cannot be rewritten to pass only the tests it saw. [How a skill improves itself](#how-a-skill-improves-itself) explains this step in full.
 6. **Report.** Writes `reports/YYYY-MM-DD.md`: what changed in each source, every skill's score with and without it, the change since yesterday, the checks a revision fixed, and pages no skill covers yet.
 
 ## Quickstart
@@ -75,16 +75,60 @@ You need Node 20 or later, an MCP Studio account, and an OpenAI API key.
 3. Add `MCP_STUDIO_API_KEY` and `OPENAI_API_KEY` under **Settings** > **Secrets and variables** > **Actions**. Optionally add a variable named `OPENAI_MODEL`.
 4. Run the workflow once from the **Actions** tab, or wait for the schedule. Tick **replan** to plan the skills again from scratch.
 
-## Where the results go
+## How a skill improves itself
 
-Nothing is emailed or posted anywhere. Every run writes its results into the repository, and on GitHub Actions the workflow commits them, so the history is your commit log.
+A skill gets better the same way a person's notes do: someone checks whether following it produces the right result, finds what was missed, and fixes the instructions. Here a model does the fixing, and the checks decide whether the fix stays.
+
+**The checks are fixed and come from the docs.** When a skill is first written, the project also writes its evals from the same documentation passages: a few requests a developer would make, and for each one, three checks naming exact things a correct answer must contain, such as a command, a parameter, a permission, or a limit. The evals stay the same from day to day, so scores are comparable. They are rewritten only when the skill's documentation pages change.
+
+**Half the evals are held out.** Evals alternate between *practice* and *held out*. The model that revises the skill sees only the practice misses. The held-out evals are graded every time but never shown to it, which is how the project notices a revision that learned the test instead of the task.
+
+**Each day, for each skill:**
+
+1. **Grade the skill as it is.** Every eval is answered by a model following the skill, and every check is graded. A check passes only when the grader quotes the part of the answer that satisfies it.
+2. **Collect what it missed.** For each practice eval with a failed check, the reviser gets the request, the checks that failed, and the start of the answer.
+3. **Revise.** The reviser gets the current skill, those misses, and the documentation passages, and rewrites the skill. It is told to use only facts from the passages and never to mention the tests, so it fixes the instructions rather than writing in answers.
+4. **Grade the revision** on every eval, practice and held out.
+5. **Keep it or throw it away.** The revision replaces the skill only if it passes at least `minGain` more checks (2 by default) **and** passes no fewer held-out checks. Otherwise the current skill stays, the report lists it under *Revisions not kept*, and that skill stops for the day.
+6. **Go again** if the revision was kept and checks are still failing, up to `improveRounds` times (2 by default).
+
+The next day starts by grading the skill again, so each day's improvement is measured against a fresh score rather than yesterday's.
+
+**When the docs change,** the skill and its evals are rewritten from the new text, and improvement starts over. Revisions made against the old docs could teach steps the docs no longer describe.
+
+**What it cannot do:** it cannot add anything the documentation does not say, it does not run the code in an answer, and one graded run varies by a check or two, which is why a revision has to win by `minGain` before it is kept.
+
+## Find each day's eval report
+
+Nothing is emailed or posted anywhere. Each run writes its report into the repository, and the GitHub workflow commits it, so every day's report stays in your history.
+
+**On GitHub**
+
+1. Open your copy of the repository and go to the `reports` folder.
+2. Open the file named with the run's date, such as `2026-10-23.md`. GitHub renders it as a page.
+
+Or open the **Actions** tab, choose **Daily skills run**, and open a run. The report is shown as that run's summary, and a failed run shows the error.
+
+**Locally**, after `npm run daily`, the report is at `reports/<today's date>.md`, and the same report is printed at the end of the run.
+
+**What the report contains:**
+
+- **Sources:** how many chunks and pages each source has, and how many pages were added, changed, or removed since the last run. A source MCP Studio is still indexing is listed as skipped.
+- **Skills:** one row per skill: whether it is new, rebuilt because its docs changed, improved, or unchanged; its score with the skill and without it; and the change since the last run.
+- **What improved:** the exact checks a kept revision now passes.
+- **Revisions not kept:** skills whose revision did not win by enough.
+- **Pages not in any skill:** documentation no skill covers yet.
+
+[`examples/mcp-studio-sdk-docs/reports/`](examples/mcp-studio-sdk-docs/reports/) has two real reports.
+
+**To dig into one skill:**
 
 | What | Where |
 |---|---|
-| The daily report | `reports/YYYY-MM-DD.md`, and the run summary on the workflow's page in the **Actions** tab |
-| Each skill's latest answers and grades | `skills/<name>/evals/latest.json` |
+| The latest answers and every check's grade and quote | `skills/<name>/evals/latest.json` |
+| The evals, and the score without the skill | `skills/<name>/evals/evals.json` |
+| What a revision changed | The diff of `skills/<name>/SKILL.md` in that day's commit |
 | Every skill's score, every day | `state/history.jsonl`, one line per skill per run |
-| What changed in a skill | The diff of `skills/<name>/SKILL.md` in that day's commit |
 
 To get the report somewhere else, add a step to `.github/workflows/daily.yml` after the run that sends `reports/$(date -u +%F).md` to Slack, email, or an issue.
 
