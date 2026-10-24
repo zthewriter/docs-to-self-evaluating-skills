@@ -140,7 +140,23 @@ Each skill is a folder in `skills/` containing `SKILL.md`. Copy the folders you 
 
 ## Configuration
 
-`skills.config.json`:
+`skills.config.json`. Copy this, then replace the server slug and source IDs with yours. Add one entry to `sources` per source you want skills from:
+
+```json
+{
+  "sources": [
+    { "server": "aws-docs-a1b2c3", "sourceId": "cm1src000002" },
+    { "server": "aws-docs-a1b2c3", "sourceId": "cm1src000003" }
+  ],
+  "maxSkillsPerSource": 6,
+  "evalsPerSkill": 4,
+  "improveRounds": 2,
+  "minGain": 2,
+  "maxPassageChars": 40000
+}
+```
+
+Every field except `sources` is optional and falls back to the default below.
 
 | Field | Default | Meaning |
 |---|---|---|
@@ -151,7 +167,23 @@ Each skill is a folder in `skills/` containing `SKILL.md`. Copy the folders you 
 | `minGain` | 2 | Extra checks a revision must pass to be kept |
 | `maxPassageChars` | 40000 | Documentation text given to the model per skill |
 
-Environment: `MCP_STUDIO_API_KEY`, `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-4o-mini`), and `MCP_STUDIO_BASE_URL` if you are not using `https://appatools.com/mcp-studio`.
+`.env`. Copy this into a file named `.env` in the project folder and fill in your keys. It is gitignored, so it never reaches your repository:
+
+```bash
+# Required: an MCP Studio API key from Account > API Keys
+MCP_STUDIO_API_KEY=msk_live_your_key_here
+
+# Required: an OpenAI API key
+OPENAI_API_KEY=sk-your_key_here
+
+# Optional: the model that writes, answers, and grades (default gpt-4o-mini)
+OPENAI_MODEL=gpt-4o-mini
+
+# Optional: only if you are not using https://appatools.com/mcp-studio
+# MCP_STUDIO_BASE_URL=https://appatools.com/mcp-studio
+```
+
+On GitHub Actions, set the two keys as repository secrets instead, and `OPENAI_MODEL` as a repository variable if you want a different model. See [Run it every day on GitHub Actions](#run-it-every-day-on-github-actions).
 
 ## Example
 
