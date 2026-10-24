@@ -192,6 +192,13 @@ On GitHub Actions, set the two keys as repository secrets instead, and `OPENAI_M
 
 Set `"granularity": "chunk"` and every chunk MCP Studio holds for a source becomes its own skill, graded against that chunk. There is no planner step. A source with 300 chunks makes about 250 skills (exact duplicates are skipped) and roughly 35 model calls each, so set `concurrency` and expect the first run to take a while. An agent cannot read hundreds of skills at once: it should see each skill's name and description and open only the ones that fit.
 
+Chunk skills are linked so an agent can keep walking through the docs:
+
+- Each skill ends with a **Related skills** section: the chunk before and after it on its page, the start of its page, and the skills for pages its text links to. The links are written by code, so every one points at a skill that exists, and they are refreshed on every run.
+- A **map skill** per source (`docs-map-<source>`) lists every page with the skills written from it. It is the place to start when you do not know which skill fits.
+
+Linking helps an agent find a neighboring chunk, not read it for it. If the docs themselves say something different from the rest of the page, the skills will too.
+
 ## Example
 
 `examples/mcp-studio-sdk-docs/` is two consecutive days run against the MCP Studio SDK docs with two skills: the skills, their evals, and both reports. It was run before `minGain` was raised to 2, so its second day kept a one-check revision that the current default would not.

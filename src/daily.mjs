@@ -1,11 +1,12 @@
 import { fetchSourceChunks } from './mcp-studio.mjs'
 import { chunkPassage, diffPages, groupPages, inScope, pageHashes, passagesFor } from './pages.mjs'
-import { chunkKey, describeChunk, planChunkSlots, planSkills } from './plan.mjs'
-import { improveSkill, writeSkill } from './skills.mjs'
+import { chunkKey, describeChunk, linkSkills, planChunkSlots, planSkills } from './plan.mjs'
+import { improveSkill, indexName, renderIndex, withRelated, writeSkill } from './skills.mjs'
 import { generateEvals, runEvals, score, shouldAccept, trainMisses } from './evals.mjs'
 import { renderReport } from './report.mjs'
 import { MODEL } from './llm.mjs'
-import { appendHistory, lastScores, paths, readJson, readText, write } from './store.mjs'
+import { join } from 'node:path'
+import { appendHistory, lastScores, paths, readJson, readText, ROOT, write } from './store.mjs'
 
 const DEFAULTS = { maxSkillsPerSource: 25, evalsPerSkill: 4, improveRounds: 2, minGain: 2, maxPassageChars: 40000, granularity: 'topic', concurrency: 1 }
 
@@ -82,7 +83,7 @@ async function runSkill(plan, pages, diff, config, previous) {
     if (status === 'unchanged') status = 'improved'
   }
 
-  write(paths.skill(plan.name), skillMd)
+  write(paths.skill(plan.name), withRelated(skillMd, plan.related))
   write(paths.latest(plan.name), { model: MODEL, score: current, baseline, results })
   return { name: plan.name, status, score: current, baseline, previous, fixed: newlyPassing(firstResults, results), rejected }
 }
@@ -126,7 +127,9 @@ export async function daily({ date = new Date().toISOString().slice(0, 10), repl
         const kept = old.get(slot.name)
         return kept?.description ? { ...slot, description: kept.description, task: kept.task } : describeChunk(slot, byKey.get(slot.chunkKey))
       })
+      linkSkills(plans[src.sourceId], chunks)
       write(paths.plan, plans)
+      write(join(ROOT, 'skills', indexName(label), 'SKILL.md'), renderIndex(label, plans[src.sourceId], new Map([...pages].map(([url, page]) => [url, page.title]))))
       log(`  ${plans[src.sourceId].length} skills, one per chunk (${chunks.length - plans[src.sourceId].length} chunks skipped as exact duplicates of another chunk)`)
     } else if (replan || !plans[src.sourceId]?.length) {
       const taken = new Set(Object.entries(plans).filter(([id]) => id !== src.sourceId).flatMap(([, list]) => list.map((p) => p.name)))

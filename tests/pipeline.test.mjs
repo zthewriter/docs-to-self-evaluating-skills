@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { alignResults } from '../src/eval-core.mjs'
 import { chunkPassage, diffPages, groupPages, inScope, pageHashes, passagesFor } from '../src/pages.mjs'
-import { chunkKey, planChunkSlots, validatePlan } from '../src/plan.mjs'
-import { renderSkill } from '../src/skills.mjs'
+import { chunkKey, linkSkills, linksIn, planChunkSlots, validatePlan } from '../src/plan.mjs'
+import { renderIndex, renderSkill, withRelated } from '../src/skills.mjs'
 import { score, shouldAccept, splitFor, trainMisses } from '../src/evals.mjs'
 import { newlyPassing } from '../src/daily.mjs'
 import { renderReport } from '../src/report.mjs'
@@ -136,4 +136,48 @@ test('a chunk skill is written from its own chunk and nothing else on the page',
   assert.match(passage, /second text/)
   assert.ok(!passage.includes('first text'))
   assert.equal(slot.chunkKey, chunkKey(chunk('https://x/a', 1, 'h2')))
+})
+
+const linked = () => {
+  const chunks = [
+    chunk('https://x/a', 0, 'h0', 'intro'),
+    chunk('https://x/a', 1, 'h1', 'see [blocks](/b) and https://x/missing and [self](/a)'),
+    chunk('https://x/a', 2, 'h2', 'end'),
+    chunk('https://x/a', 3, 'h3', 'tail'),
+    chunk('https://x/b', 0, 'h4', 'blocks'),
+  ]
+  const plans = planChunkSlots(chunks).map((s) => ({ ...s, description: `does ${s.chunkKey}`, task: 't' }))
+  return { plans: linkSkills(plans, chunks), chunks }
+}
+
+test('chunk skills point at their neighbors, their page start, and the pages their text links to', () => {
+  const { plans } = linked()
+  const rel = (i) => plans[i].related.map((r) => `${r.relation}>${plans.find((p) => p.name === r.name).chunkKey}`)
+  assert.deepEqual(rel(0), ['next>https://x/a|1'])
+  assert.deepEqual(rel(1), ['previous>https://x/a|0', 'next>https://x/a|2', 'linked from this text>https://x/b|0'])
+  assert.deepEqual(rel(3), ['previous>https://x/a|2', 'start of this page>https://x/a|0'])
+  for (const plan of plans) assert.ok(!plan.related.some((r) => r.name === plan.name))
+})
+
+test('links resolve relative addresses and ignore anything that is not a page', () => {
+  assert.deepEqual(linksIn(chunk('https://x/docs/a#L1-L9', 0, 'h', 'a [b](../b.md#top) c [d](mailto:q@x.com)')), ['https://x/b'])
+})
+
+test('related skills are re-rendered in place, before Sources, and never pile up', () => {
+  const { plans } = linked()
+  const skill = renderSkill({ name: 'n', description: 'd' }, '## Steps\n1. Go', ['https://x/a'])
+  const once = withRelated(skill, plans[1].related)
+  assert.equal(withRelated(once, plans[1].related), once)
+  assert.ok(once.indexOf('## Related skills') < once.indexOf('## Sources'))
+  assert.equal(withRelated(once, []), skill)
+  // The improver is shown a skill that has the section and must not echo it back.
+  assert.equal(renderSkill({ name: 'n', description: 'd' }, once, ['https://x/a']).match(/## Related skills/g), null)
+})
+
+test('the map skill lists every page with its skills', () => {
+  const { plans } = linked()
+  const md = renderIndex('docs.example.com', plans, new Map([['https://x/a', 'Page A']]))
+  assert.match(md, /^---\nname: docs-map-docs-example-com\n/)
+  assert.ok(plans.every((p) => md.includes(`](../${p.name}/SKILL.md)`)))
+  assert.match(md, /- Page A \(https:\/\/x\/a\)/)
 })

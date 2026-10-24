@@ -18,7 +18,7 @@ You get the current skill, test requests whose answers missed checks, and the so
 
 /** Frontmatter and sources are written here, not by the model, so they stay exact. */
 export function renderSkill({ name, description }, body, sourceUrls) {
-  const clean = parseSkill(body).body.replace(/\n## Sources[\s\S]*$/i, '').trim()
+  const clean = stripRelated(parseSkill(body).body.replace(/\n## Sources[\s\S]*$/i, '')).trim()
   const sources = sourceUrls.map((url) => `- ${url}`).join('\n')
   return `---\nname: ${name}\ndescription: ${JSON.stringify(description)}\n---\n\n${clean}\n\n## Sources\n\n${sources}\n`
 }
@@ -47,3 +47,35 @@ export async function improveSkill(plan, skillMd, misses, passages) {
   )
   return renderSkill(plan, body, plan.pages)
 }
+
+const stripRelated = (text) => text.replace(/\n## Related skills\n[\s\S]*?(?=\n## Sources|$)/i, '')
+
+/**
+ * Adds the cross-references, written by code so every link points at a skill that exists.
+ * They go before Sources and are re-rendered every run, so a new neighbor shows up without rewriting the skill.
+ */
+export function withRelated(skillMd, related) {
+  if (!related) return skillMd
+  const clean = stripRelated(skillMd)
+  const at = clean.search(/\n## Sources\n/)
+  const head = (at === -1 ? clean : clean.slice(0, at)).trim()
+  const tail = at === -1 ? '' : clean.slice(at).trim()
+  const lines = related.map((r) => `- ${r.relation}: [${r.name}](../${r.name}/SKILL.md): ${r.description}`).join('\n')
+  const block = related.length ? `## Related skills\n\nOpen these when this skill does not have what you need.\n\n${lines}` : ''
+  return `${[head, block, tail].filter(Boolean).join('\n\n')}\n`
+}
+
+/** A map of one source: each page, with the skills written from its chunks. Agents start here when they do not know which skill fits. */
+export function renderIndex(label, plans, titles) {
+  const byPage = new Map()
+  for (const plan of plans) {
+    const page = plan.pages[0]
+    if (!byPage.has(page)) byPage.set(page, [])
+    byPage.get(page).push(plan.name)
+  }
+  const rows = [...byPage].map(([page, names]) => `- ${titles.get(page) || page} (${page}): ${names.map((n) => `[${n}](../${n}/SKILL.md)`).join(', ')}`)
+  const description = `Find which skill covers a page of ${label}; start here when you do not know which skill fits.`
+  return `---\nname: ${indexName(label)}\ndescription: ${JSON.stringify(description)}\n---\n\n## Pages and their skills\n\nEach skill below was written from one chunk of the page. Open the ones you need, and follow the Related skills inside them.\n\n${rows.join('\n')}\n`
+}
+
+export const indexName = (label) => `docs-map-${String(label).toLowerCase().replace(/^https?:\/\//, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)}`
