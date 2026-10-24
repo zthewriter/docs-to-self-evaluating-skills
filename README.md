@@ -24,7 +24,7 @@ flowchart LR
 Every day, after MCP Studio refreshes your sources:
 
 1. **Sync.** Reads every chunk of each configured source and compares page fingerprints with yesterday's. A source that is still indexing is skipped until tomorrow.
-2. **Plan.** On the first run, a model reads the page titles and proposes up to six task-shaped skills, each tied to the pages it needs. The plan is saved in `state/plan.json`; edit it by hand if you like.
+2. **Plan.** On the first run, a model reads the page titles and proposes up to 25 task-shaped skills per source, each tied to the pages it needs. The plan is saved in `state/plan.json`; edit it by hand if you like.
 3. **Build.** A new skill, or one whose pages changed, is written from those pages' passages. Its evals are rewritten from the same passages, so the skill is graded against the docs rather than against itself.
 4. **Grade.** Each eval is answered twice, once following the skill and once without it, and every check is graded. A pass counts only when the grader quotes the answer, so a lenient grader cannot pass a check it did not verify.
 5. **Improve.** The model revises the skill using the checks it missed, and the revision is graded again. It replaces the skill only if it passes at least two more checks **and** no fewer held-out checks. Half the evals are held out and never shown to the reviser, so a skill cannot be rewritten to pass only the tests it saw. [How a skill improves itself](#how-a-skill-improves-itself) explains this step in full.
@@ -64,7 +64,7 @@ You need Node 20 or later, an MCP Studio account, and an OpenAI API key.
    npm run daily
    ```
 
-   The first run plans and builds the skills. Expect about five minutes and about 200 model calls for six skills, fewer on later days.
+   The first run plans and builds the skills. Expect about 40 seconds and a few dozen model calls per skill, so a source that fills all 25 takes roughly 15 to 20 minutes, and later days are faster.
 
 ## Run it every day on GitHub Actions
 
@@ -148,7 +148,7 @@ Each skill is a folder in `skills/` containing `SKILL.md`. Copy the folders you 
     { "server": "aws-docs-a1b2c3", "sourceId": "cm1src000002" },
     { "server": "aws-docs-a1b2c3", "sourceId": "cm1src000003" }
   ],
-  "maxSkillsPerSource": 6,
+  "maxSkillsPerSource": 25,
   "evalsPerSkill": 4,
   "improveRounds": 2,
   "minGain": 2,
@@ -161,7 +161,8 @@ Every field except `sources` is optional and falls back to the default below.
 | Field | Default | Meaning |
 |---|---|---|
 | `sources` | | `[{ "server": "<slug or id>", "sourceId": "<id>" }]` |
-| `maxSkillsPerSource` | 6 | Skills planned per source |
+| `maxSkillsPerSource` | 25 | Skills planned per source |
+| `includeUrlPrefixes` | none | Only use pages whose URL starts with one of these, for example `["https://docs.example.com/"]` |
 | `evalsPerSkill` | 4 | Evals per skill, half held out |
 | `improveRounds` | 2 | Revision attempts per skill per day |
 | `minGain` | 2 | Extra checks a revision must pass to be kept |

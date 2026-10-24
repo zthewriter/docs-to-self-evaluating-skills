@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { alignResults } from '../src/eval-core.mjs'
-import { diffPages, groupPages, pageHashes, passagesFor } from '../src/pages.mjs'
+import { diffPages, groupPages, inScope, pageHashes, passagesFor } from '../src/pages.mjs'
 import { validatePlan } from '../src/plan.mjs'
 import { renderSkill } from '../src/skills.mjs'
 import { score, shouldAccept, splitFor, trainMisses } from '../src/evals.mjs'
@@ -108,4 +108,11 @@ test('the client pages through the chunks endpoint until nextCursor is null', as
   assert.match(seen[0][0], /\/api\/mcp\/srv\/sources\/src\/chunks\?limit=100$/)
   assert.match(seen[1][0], /cursor=c1/)
   assert.equal(seen[0][1], 'Bearer msk_live_test')
+})
+
+test('scoping keeps only pages under the given prefixes, and everything when none are set', () => {
+  const chunks = [chunk('https://docs.test/a', 0, 'h1'), chunk('https://vendor.test/b', 0, 'h2'), chunk('https://docs.test/c', 0, 'h3')]
+  assert.deepEqual(inScope(chunks, ['https://docs.test/']).map((c) => c.url), ['https://docs.test/a', 'https://docs.test/c'])
+  assert.equal(inScope(chunks, undefined).length, 3)
+  assert.equal(inScope(chunks, []).length, 3)
 })

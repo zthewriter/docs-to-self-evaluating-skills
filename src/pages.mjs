@@ -4,6 +4,14 @@ import { createHash } from 'node:crypto'
 export const pageOf = (url) => url.split('#')[0]
 
 /** Chunks grouped by page, in document order. */
+/**
+ * Chunks whose page URL starts with one of `prefixes`; all of them when none are set.
+ * Use it to keep skills to the docs you meant: a docs host's pages can link to its vendor's own site.
+ */
+export function inScope(chunks, prefixes) {
+  return prefixes?.length ? chunks.filter((c) => prefixes.some((p) => c.url.startsWith(p))) : chunks
+}
+
 export function groupPages(chunks) {
   const pages = new Map()
   for (const chunk of chunks) {

@@ -2,7 +2,7 @@
   "sources": [
     { "server": "<your-server-slug>", "sourceId": "<source-id>" }
   ],
-  "maxSkillsPerSource": 6,
+  "maxSkillsPerSource": 25,
   "evalsPerSkill": 4,
   "improveRounds": 2,
   "minGain": 2,

@@ -1,5 +1,5 @@
 import { fetchSourceChunks } from './mcp-studio.mjs'
-import { diffPages, groupPages, pageHashes, passagesFor } from './pages.mjs'
+import { diffPages, groupPages, inScope, pageHashes, passagesFor } from './pages.mjs'
 import { planSkills } from './plan.mjs'
 import { improveSkill, writeSkill } from './skills.mjs'
 import { generateEvals, runEvals, score, shouldAccept, trainMisses } from './evals.mjs'
@@ -7,7 +7,7 @@ import { renderReport } from './report.mjs'
 import { MODEL } from './llm.mjs'
 import { appendHistory, lastScores, paths, readJson, readText, write } from './store.mjs'
 
-const DEFAULTS = { maxSkillsPerSource: 6, evalsPerSkill: 4, improveRounds: 2, minGain: 2, maxPassageChars: 40000 }
+const DEFAULTS = { maxSkillsPerSource: 25, evalsPerSkill: 4, improveRounds: 2, minGain: 2, maxPassageChars: 40000 }
 
 // MCP Studio is still writing chunks; paging now could skip or repeat rows that move.
 const INDEXING = new Set(['pending', 'crawling'])
@@ -88,7 +88,8 @@ export async function daily({ date = new Date().toISOString().slice(0, 10), repl
       sourceRows.push({ label: src.sourceId, skipped: err.message.slice(0, 200) })
       continue
     }
-    const { source, chunks } = fetched
+    const { source } = fetched
+    const chunks = inScope(fetched.chunks, config.includeUrlPrefixes)
     const label = source.label || source.url
     if (INDEXING.has(source.crawlStatus)) {
       sourceRows.push({ label, skipped: 'MCP Studio is still indexing it; it runs again tomorrow' })
