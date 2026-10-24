@@ -56,3 +56,13 @@ export function passagesFor(pages, urls, maxChars) {
   }
   return out
 }
+
+/** The one chunk a chunk-level skill is written and graded from. */
+export function chunkPassage(pages, plan, maxChars) {
+  for (const page of pages.get(plan.pages[0])?.chunks || []) {
+    if (`${page.url}|${page.chunkIndex}` !== plan.chunkKey) continue
+    const label = page.generated ? ' (AI description of an image)' : ''
+    return `\n[Source: ${page.url}]${label}\n${page.content.trim().slice(0, maxChars)}\n`
+  }
+  return ''
+}

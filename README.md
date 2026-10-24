@@ -162,6 +162,8 @@ Every field except `sources` is optional and falls back to the default below.
 |---|---|---|
 | `sources` | | `[{ "server": "<slug or id>", "sourceId": "<id>" }]` |
 | `maxSkillsPerSource` | 25 | Skills planned per source |
+| `granularity` | `topic` | `topic` plans task-sized skills from groups of pages. `chunk` writes one skill per indexed chunk and skips chunks whose text another chunk already holds |
+| `concurrency` | 1 | Skills built at the same time. Use 4 to 8 with `chunk`, which makes hundreds of skills |
 | `includeUrlPrefixes` | none | Only use pages whose URL starts with one of these, for example `["https://docs.example.com/"]` |
 | `evalsPerSkill` | 4 | Evals per skill, half held out |
 | `improveRounds` | 2 | Revision attempts per skill per day |
@@ -185,6 +187,10 @@ OPENAI_MODEL=gpt-4o-mini
 ```
 
 On GitHub Actions, set the two keys as repository secrets instead, and `OPENAI_MODEL` as a repository variable if you want a different model. See [Run it every day on GitHub Actions](#run-it-every-day-on-github-actions).
+
+### One skill per chunk
+
+Set `"granularity": "chunk"` and every chunk MCP Studio holds for a source becomes its own skill, graded against that chunk. There is no planner step. A source with 300 chunks makes about 250 skills (exact duplicates are skipped) and roughly 35 model calls each, so set `concurrency` and expect the first run to take a while. An agent cannot read hundreds of skills at once: it should see each skill's name and description and open only the ones that fit.
 
 ## Example
 

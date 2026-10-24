@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { alignResults } from '../src/eval-core.mjs'
-import { diffPages, groupPages, inScope, pageHashes, passagesFor } from '../src/pages.mjs'
-import { validatePlan } from '../src/plan.mjs'
+import { chunkPassage, diffPages, groupPages, inScope, pageHashes, passagesFor } from '../src/pages.mjs'
+import { chunkKey, planChunkSlots, validatePlan } from '../src/plan.mjs'
 import { renderSkill } from '../src/skills.mjs'
 import { score, shouldAccept, splitFor, trainMisses } from '../src/evals.mjs'
 import { newlyPassing } from '../src/daily.mjs'
@@ -115,4 +115,25 @@ test('scoping keeps only pages under the given prefixes, and everything when non
   assert.deepEqual(inScope(chunks, ['https://docs.test/']).map((c) => c.url), ['https://docs.test/a', 'https://docs.test/c'])
   assert.equal(inScope(chunks, undefined).length, 3)
   assert.equal(inScope(chunks, []).length, 3)
+})
+
+test('chunk granularity gives every distinct chunk one skill, and none to an exact duplicate', () => {
+  const seen = new Set()
+  const first = planChunkSlots([chunk('https://x/a', 0, 'h1'), chunk('https://x/a', 1, 'h2'), chunk('https://x/b', 0, 'h1')], new Set(), seen)
+  assert.equal(first.length, 2)
+  assert.equal(new Set(first.map((s) => s.name)).size, 2)
+  // The same text in another source (shared `seen`) is not skilled twice; a new chunk is.
+  const second = planChunkSlots([chunk('https://y/a', 0, 'h2'), chunk('https://y/c', 0, 'h3')], new Set(), seen)
+  assert.deepEqual(second.map((s) => s.chunkKey), ['https://y/c|0'])
+  // Names are stable across runs, so a refresh finds the skill it wrote before.
+  assert.deepEqual(planChunkSlots([chunk('https://x/a', 1, 'h2')]).map((s) => s.name), [first[1].name])
+})
+
+test('a chunk skill is written from its own chunk and nothing else on the page', () => {
+  const pages = groupPages([chunk('https://x/a', 0, 'h1', 'first text'), chunk('https://x/a', 1, 'h2', 'second text')])
+  const [, slot] = planChunkSlots([chunk('https://x/a', 0, 'h1'), chunk('https://x/a', 1, 'h2')])
+  const passage = chunkPassage(pages, slot, 1000)
+  assert.match(passage, /second text/)
+  assert.ok(!passage.includes('first text'))
+  assert.equal(slot.chunkKey, chunkKey(chunk('https://x/a', 1, 'h2')))
 })

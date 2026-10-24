@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { completeJson } from './llm.mjs'
 
 const MAX_PAGES_IN_PROMPT = 400
@@ -33,4 +34,42 @@ export async function planSkills(pages, max, taken) {
   const list = [...pages.values()].slice(0, MAX_PAGES_IN_PROMPT).map((p) => `- ${p.title} | ${p.url}`).join('\n')
   const raw = await completeJson(SYSTEM, `Plan up to ${max} skills from these pages:\n${list}`, 2500)
   return validatePlan(raw, [...pages.keys()], max, taken)
+}
+
+export const chunkKey = (chunk) => `${chunk.url}|${chunk.chunkIndex}`
+
+/**
+ * One skill slot per chunk, in document order. A chunk whose text another chunk already
+ * holds (`seen`, shared across sources) gets no slot, so a page indexed twice is not skilled twice.
+ */
+export function planChunkSlots(chunks, taken = new Set(), seen = new Set()) {
+  const names = new Set(taken)
+  const slots = []
+  for (const chunk of chunks) {
+    if (seen.has(chunk.contentHash)) continue
+    seen.add(chunk.contentHash)
+    const key = chunkKey(chunk)
+    const stem = String(chunk.title || 'chunk').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50).replace(/-+$/, '') || 'chunk'
+    const name = `${stem}-${createHash('sha256').update(key).digest('hex').slice(0, 6)}`
+    if (names.has(name)) continue
+    names.add(name)
+    slots.push({ name, chunkKey: key, contentHash: chunk.contentHash, pages: [chunk.url.split('#')[0]] })
+  }
+  return slots
+}
+
+const DESCRIBE = `You name what one documentation passage teaches a coding assistant.
+Return JSON: {"description":"...","task":"..."}.
+- description: one sentence saying what the skill does and when to use it, starting with a verb.
+- task: one sentence a developer would type to ask for this.
+Use only what the passage says.`
+
+/** Adds the description and task a skill needs; one small call per new chunk. */
+export async function describeChunk(slot, chunk) {
+  const raw = await completeJson(DESCRIBE, `Title: ${chunk.title}\nURL: ${chunk.url}\n\n${chunk.content.slice(0, 6000)}`, 300)
+  return {
+    ...slot,
+    description: String(raw?.description || chunk.title || slot.name).trim().slice(0, 300),
+    task: String(raw?.task || chunk.title || slot.name).trim().slice(0, 300),
+  }
 }

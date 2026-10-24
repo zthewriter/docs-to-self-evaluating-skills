@@ -1,13 +1,13 @@
 import { fetchSourceChunks } from './mcp-studio.mjs'
-import { diffPages, groupPages, inScope, pageHashes, passagesFor } from './pages.mjs'
-import { planSkills } from './plan.mjs'
+import { chunkPassage, diffPages, groupPages, inScope, pageHashes, passagesFor } from './pages.mjs'
+import { chunkKey, describeChunk, planChunkSlots, planSkills } from './plan.mjs'
 import { improveSkill, writeSkill } from './skills.mjs'
 import { generateEvals, runEvals, score, shouldAccept, trainMisses } from './evals.mjs'
 import { renderReport } from './report.mjs'
 import { MODEL } from './llm.mjs'
 import { appendHistory, lastScores, paths, readJson, readText, write } from './store.mjs'
 
-const DEFAULTS = { maxSkillsPerSource: 25, evalsPerSkill: 4, improveRounds: 2, minGain: 2, maxPassageChars: 40000 }
+const DEFAULTS = { maxSkillsPerSource: 25, evalsPerSkill: 4, improveRounds: 2, minGain: 2, maxPassageChars: 40000, granularity: 'topic', concurrency: 1 }
 
 // MCP Studio is still writing chunks; paging now could skip or repeat rows that move.
 const INDEXING = new Set(['pending', 'crawling'])
@@ -25,14 +25,29 @@ export function newlyPassing(before, after) {
   return after.flatMap((r) => r.grading.assertion_results.filter((a) => a.passed && failed.has(`${r.id}:${a.text}`)).map((a) => a.text))
 }
 
+/** Runs `fn` over `items` with at most `limit` in flight, keeping the order of the results. */
+async function pool(items, limit, fn) {
+  const out = new Array(items.length)
+  let next = 0
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    while (next < items.length) {
+      const i = next++
+      out[i] = await fn(items[i])
+    }
+  }))
+  return out
+}
+
 async function runSkill(plan, pages, diff, config, previous) {
-  const passages = passagesFor(pages, plan.pages, config.maxPassageChars)
+  const passages = plan.chunkKey ? chunkPassage(pages, plan, config.maxPassageChars) : passagesFor(pages, plan.pages, config.maxPassageChars)
   if (!passages) throw new Error('none of its pages are indexed any more')
 
   let skillMd = readText(paths.skill(plan.name))
   let evalFile = readJson(paths.evals(plan.name), null)
   const touched =
-    plan.pages.some((url) => diff.changed.includes(url) || diff.removed.includes(url)) ||
+    (plan.chunkKey
+      ? evalFile?.contentHash !== plan.contentHash
+      : plan.pages.some((url) => diff.changed.includes(url) || diff.removed.includes(url))) ||
     JSON.stringify(evalFile?.pages) !== JSON.stringify(plan.pages)
   let status = !skillMd || !evalFile ? 'new' : touched ? 'rebuilt' : 'unchanged'
 
@@ -41,7 +56,7 @@ async function runSkill(plan, pages, diff, config, previous) {
     skillMd = await writeSkill(plan, passages)
     const evals = await generateEvals(plan, passages, config.evalsPerSkill)
     if (!evals.length) throw new Error('could not write evals from its pages')
-    evalFile = { skill_name: plan.name, task: plan.task, pages: plan.pages, evals, baseline: score(await runEvals(null, evals)) }
+    evalFile = { skill_name: plan.name, task: plan.task, pages: plan.pages, contentHash: plan.contentHash, evals, baseline: score(await runEvals(null, evals)) }
     write(paths.evals(plan.name), evalFile)
   }
 
@@ -79,6 +94,7 @@ export async function daily({ date = new Date().toISOString().slice(0, 10), repl
   const previous = lastScores()
   const sourceRows = []
   const skillRows = []
+  const seenHashes = new Set()
 
   for (const src of config.sources) {
     let fetched
@@ -99,7 +115,20 @@ export async function daily({ date = new Date().toISOString().slice(0, 10), repl
     const diff = diffPages(state[src.sourceId]?.pages, pages)
     log(`${label}: ${chunks.length} chunks, ${pages.size} pages (+${diff.added.length} ~${diff.changed.length} -${diff.removed.length})`)
 
-    if (replan || !plans[src.sourceId]?.length) {
+    if (config.granularity === 'chunk') {
+      // One skill per chunk: no planner. The slots are rebuilt each run so new chunks get skills
+      // and descriptions already written are reused.
+      const taken = new Set(Object.entries(plans).filter(([id]) => id !== src.sourceId).flatMap(([, list]) => list.map((p) => p.name)))
+      const old = new Map((plans[src.sourceId] || []).map((p) => [p.name, p]))
+      const byKey = new Map(chunks.map((c) => [chunkKey(c), c]))
+      const slots = planChunkSlots(chunks, taken, seenHashes)
+      plans[src.sourceId] = await pool(slots, config.concurrency, async (slot) => {
+        const kept = old.get(slot.name)
+        return kept?.description ? { ...slot, description: kept.description, task: kept.task } : describeChunk(slot, byKey.get(slot.chunkKey))
+      })
+      write(paths.plan, plans)
+      log(`  ${plans[src.sourceId].length} skills, one per chunk (${chunks.length - plans[src.sourceId].length} chunks skipped as exact duplicates of another chunk)`)
+    } else if (replan || !plans[src.sourceId]?.length) {
       const taken = new Set(Object.entries(plans).filter(([id]) => id !== src.sourceId).flatMap(([, list]) => list.map((p) => p.name)))
       plans[src.sourceId] = await planSkills(pages, config.maxSkillsPerSource, taken)
       write(paths.plan, plans)
@@ -107,7 +136,7 @@ export async function daily({ date = new Date().toISOString().slice(0, 10), repl
     }
 
     const covered = new Set(plans[src.sourceId].flatMap((p) => p.pages))
-    for (const plan of plans[src.sourceId]) {
+    await pool(plans[src.sourceId], config.concurrency, async (plan) => {
       try {
         const row = await runSkill(plan, pages, diff, config, previous[plan.name])
         skillRows.push(row)
@@ -117,7 +146,7 @@ export async function daily({ date = new Date().toISOString().slice(0, 10), repl
         skillRows.push({ name: plan.name, status: 'failed', error: err.message.slice(0, 160) })
         log(`  ${plan.name}: failed, ${err.message}`)
       }
-    }
+    })
 
     state[src.sourceId] = { server: src.server, url: source.url, label, lastSyncAt: new Date().toISOString(), pages: pageHashes(pages) }
     sourceRows.push({
